@@ -7,19 +7,21 @@ class PMBus:
     VOUT_MODE = 0b00000
     VOUT_N = 0b00000
 
-    def __init__(self, addr, id=1):
+    def __init__(self, addr, id=8):
         self.busID = id
         self.address = addr
-        self.VOUT_MODE = self._readBytePMBus(0x20)
-        voutN = self.VOUT_MODE & 0b00011111
-        self.VOUT_N = self.twos_comp(voutN, 5)
+        # self.VOUT_MODE = self._readBytePMBus(0x20)
+        # voutN = self.VOUT_MODE & 0b00011111
+        # self.VOUT_N = self.twos_comp(voutN, 5)
         print("DRQ1250 succesfully connected to PMBus... \n")
 
     #Decode/encode Linear data format => X=Y*2^N
     def _decodePMBus(self, message):
+        print("Got message", bin(message))
         messageN = message >> 11
         messageY = message & 0b0000011111111111
         message = messageY*(2.0**(self.twos_comp(messageN, 5))) #calculate real values (everything but VOUT works)
+        print("decoded message", message)
         return message
 
     def _encodePMBus(self, message):
@@ -31,6 +33,15 @@ class PMBus:
         #print("YVal: " + str(Yval))
         message = ((Nval & 0b00011111)<<11) | Yval
         #print(bin(message))
+        return message
+
+    def _encodePMBus_with_N(self, message, Nval):
+        print("Sending X val = ",message)
+        Yval = int(message * (2**-Nval))
+        print("sent Y val ",Yval)
+        message = ((int(Nval) & 0b00011111)<<11) | Yval
+        print("Sent message", bin(message))
+        print("")
         return message
 
     #wrapper functions for reading/writing a word/byte to an address with pec
@@ -201,6 +212,9 @@ class PMBus:
         #max time is 100ms, min is 10ms for DRQ1250
         self._writeWordPMBus(0x65, self._encodePMBus(time))
 
+    def setCurve_ICHG(self,current):
+        self._writeWordPMBus(0xB0, self._encodePMBus_with_N(current,-3))
+
 
     def storeUserAll(self):
         """The STORE_USER_ALL command instructs the PMBus device to copy the entire
@@ -354,6 +368,11 @@ class PMBus:
             "unknown" :       bool(self.statusSummary & (0b1<<8)),
         }
         return status, self.statusSummary
+
+    def getCurve_ICHG(self):
+        print("getCurve_ICHG:")
+        self.voltageIn = self._decodePMBus(self._readWordPMBus(0xB0))
+        return self.voltageIn
 
     #method for computing twos complement
     def twos_comp(self, val, bits):
