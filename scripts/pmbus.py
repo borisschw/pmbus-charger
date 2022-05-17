@@ -10,6 +10,7 @@ class PMBus:
     def __init__(self, addr, id=8):
         self.busID = id
         self.address = addr
+
         # self.VOUT_MODE = self._readBytePMBus(0x20)
         # voutN = self.VOUT_MODE & 0b00011111
         # self.VOUT_N = self.twos_comp(voutN, 5)
@@ -19,7 +20,9 @@ class PMBus:
     def _decodePMBus(self, message):
         print("Got message", bin(message))
         messageN = message >> 11
+        print("messageN = ", messageN)
         messageY = message & 0b0000011111111111
+        print("messageY = ", messageY)
         message = messageY*(2.0**(self.twos_comp(messageN, 5))) #calculate real values (everything but VOUT works)
         print("decoded message", message)
         return message
@@ -130,7 +133,24 @@ class PMBus:
         self._writeWordPMBus(0x42, ovWarnLimit)
         #print("New VOUT OV Limit: " + str(self.getVoutOVLimit()))
 
-    def setIoutOCLimit(self, ocLimit, maxOverCurrent=65.0):
+    # def setIoutOCLimit(self, ocLimit, maxOverCurrent=65.0):
+    #     """The IOUT_OV_WARN_LIMIT command sets the value of the output current that causes
+    #     an output overcurrent warning. The IOUT_OC_FAULT_LIMIT command sets the value of the output current, in
+    #     amperes, that causes the overcurrent detector to indicate an overcurrent fault condition."""
+    #     #min = 59, max = 65 for DRQ1250
+    #     if(ocLimit < maxOverCurrent):
+    #         ocWarnLimit  = float(ocLimit) - 3
+    #         ocFaultLimit = float(ocLimit)
+    #     else:
+    #         ocWarnLimit  = maxOverCurrent - 3
+    #         ocFaultLimit = maxOverCurrent
+
+    #     #print("Old IOUT OC Limit: " + str(self.getIoutOCLimit()))
+    #     self._writeWordPMBus(0x46, self._encodePMBus(ocFaultLimit))
+    #     self._writeWordPMBus(0x4A, self._encodePMBus(ocWarnLimit))
+    #     #print("New IOUT OC Limit: " + str(self.getIoutOCLimit()))
+
+    def setIoutOCLimit(self, ocLimit, maxOverCurrent=55.0):
         """The IOUT_OV_WARN_LIMIT command sets the value of the output current that causes
         an output overcurrent warning. The IOUT_OC_FAULT_LIMIT command sets the value of the output current, in
         amperes, that causes the overcurrent detector to indicate an overcurrent fault condition."""
@@ -215,6 +235,21 @@ class PMBus:
     def setCurve_ICHG(self,current):
         self._writeWordPMBus(0xB0, self._encodePMBus_with_N(current,-3))
 
+    def setCurveConfig (self, val):
+        self._writeWordPMBus(0xB4, val)
+
+    def setCurve_vbst (self, val):
+        self._writeWordPMBus(0xB1, self._encodePMBus_with_N(val,-9))
+
+    def set_ccTimeout (self, val):
+        self._writeWordPMBus(0xB5, self._encodePMBus_with_N(val, 0))
+
+    def set_cvTimeout (self, val):
+        self._writeWordPMBus(0xB6, self._encodePMBus_with_N(val, 0))
+
+    def set_floatTimeout (self, val):
+        self._writeWordPMBus(0xB7, self._encodePMBus_with_N(val, 0))
+
 
     def storeUserAll(self):
         """The STORE_USER_ALL command instructs the PMBus device to copy the entire
@@ -256,17 +291,25 @@ class PMBus:
             self._writeBytePMBus(0x01,0x40) #Soft off
 
     def regOn(self):
-        self._writeBytePMBus(0x01,0x80)
+        self._writeBytePMBus(0x01,0xA4)
 
     ################################### Functions for getting PMBus values
     def getVoltageIn(self):
         self.voltageIn = self._decodePMBus(self._readWordPMBus(0x88))
         return self.voltageIn
 
+    # def getVoltageOut(self):
+    #     voltageOutMessage = self._readWordPMBus(0x8B)
+    #     self.voltageOut = voltageOutMessage*(2.0**self.VOUT_N)
+    #     return self.voltageOut
+
     def getVoltageOut(self):
-        voltageOutMessage = self._readWordPMBus(0x8B)
-        self.voltageOut = voltageOutMessage*(2.0**self.VOUT_N)
-        return self.voltageOut
+        self.VoltageOut = self._decodePMBus(self._readWordPMBus(0x8B))
+        return self.VoltageOut
+
+        # voltageOutMessage = self._readWordPMBus(0x8B)
+        # self.voltageOut = voltageOutMessage*(2.0**self.VOUT_N)
+        # return self.voltageOut
 
     def getCurrent(self):
         bus = SMBus(1)
@@ -284,6 +327,10 @@ class PMBus:
     def getTempurature(self):
         self.tempurature = self._decodePMBus(self._readWordPMBus(0x8D))
         return self.tempurature
+
+    def getReadFanSpeed(self):
+        self.fanSpeed_1 = self._decodePMBus(self._readWordPMBus(0x90))
+        return self.fanSpeed_1
 
     def getVinUVLimit(self):
         #returns fault, warn
@@ -329,6 +376,7 @@ class PMBus:
         #see page 37-40 on PMBus spec for info on response bytes
         return self._readBytePMBus(0x47)
 
+
     def getFaultResponse(self, register):
         #see page 37-40 on PMBus spec for info on response bytes
         """
@@ -370,9 +418,38 @@ class PMBus:
         return status, self.statusSummary
 
     def getCurve_ICHG(self):
-        print("getCurve_ICHG:")
         self.voltageIn = self._decodePMBus(self._readWordPMBus(0xB0))
         return self.voltageIn
+
+    def getCurveConfig(self):
+        self.curveConfigVal = self._readWordPMBus(0xB4)
+        return self.curveConfigVal
+
+
+    def getCurve_vbst(self):
+        self.curveVbstVal = self._decodePMBus(self._readWordPMBus(0xB1))
+        return self.curveVbstVal
+
+    def getPmbusRev(self):
+        self.PmbusRev = self._readBytePMBus(0x98)
+        return self.PmbusRev
+
+    def get_ccTimeout(self):
+        self.cc_timeout = self._decodePMBus(self._readWordPMBus(0xB5))
+        return self.cc_timeout
+
+    def get_cvTimeout(self):
+        self.cv_timeout = self._decodePMBus(self._readWordPMBus(0xB6))
+        return self.cv_timeout
+
+    def get_floatTimeout(self):
+        self.float_timeout = self._decodePMBus(self._readWordPMBus(0xB7))
+        return self.float_timeout
+
+    def get_chg_status(self):
+        self.chg_status = self._readWordPMBus(0xB8)
+        return self.chg_status
+
 
     #method for computing twos complement
     def twos_comp(self, val, bits):
