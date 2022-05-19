@@ -13,8 +13,8 @@ DRQ = PMBus(0x47,1) #New pmbus object with device address 0x12
 # DRQ.regOff(hard=True)
 # time.sleep(3)
 
-DRQ.regOn()
-time.sleep(3)
+# DRQ.regOn()
+# time.sleep(3)
 # DRQ.clearFaults()
 # time.sleep(3)
 
@@ -32,6 +32,9 @@ def config_ichg(val):
 
 def config_vbst(val):
     return config_param(DRQ.setCurve_vbst, DRQ.getCurve_vbst, val)
+
+def config_vfloat(val):
+    return config_param(DRQ.setCurve_vfloat, DRQ.getCurve_vfloat, val)
 
 def config_cc_timeout(val):
     return config_param(DRQ.set_ccTimeout, DRQ.get_ccTimeout, val)
@@ -72,34 +75,40 @@ def read_charge_status():
         }
     print(status)
 
+def read_status_cml():
+    com_status = DRQ.get_status_cml()
+    print("com_status = ", com_status)
+
 
 while True:
 
-    # DRQ.setCurve_ICHG(53)
-    # print("Curve_ICHG: " + str(DRQ.getCurve_ICHG()))
-    # for i in range (11,55):
-    # i = 20
-    # DRQ.setCurve_ICHG(i)
-    # time.sleep(3)
-    # ICHG = DRQ.getCurve_ICHG()
-    # time.sleep(3)
     print(DRQ.getStatusSummary())
+
+    print("FW version = ", "".join([chr(x) for x in DRQ.getMfrRevision()]))
 
     if (config_curve(0)):
         print("config_curve was sccessful")
     else:
         print("Failed to set config_curve")
 
+    read_status_cml()
     if (config_ichg(25)):
         print("curve ichg was sccessful")
     else:
         print("Failed to set ichg")
+
 
     if (config_vbst(28)):
         print("curve vbst was sccessful")
     else:
         print("Failed to set vbst")
 
+    if (config_vfloat(26)):
+        print("curve vfloat was sccessful")
+    else:
+        print("Failed to set vfloat")
+
+    read_status_cml()
 
     if (config_cc_timeout(70)):
         print("cc_timeout was sccessful")
@@ -118,19 +127,6 @@ while True:
 
 
     read_charge_status()
-
-    # print("Curve_ICHG: " + str(ICHG))
-    # print("--------->> sent: ",i)
-    # print("--------->> got: ",str(ICHG))
-    # print("Vin = ", DRQ.getVoltageIn()*2**-1)
-    # time.sleep(3)
-    # print("Vout = ", DRQ.getVoltageOut()*2**(-9))
-
-    # if (i == ICHG):
-    #     print("Success")
-    # else:
-    #     print("----------------------------------->> Fail <<--------")
-    # time.sleep(2)
 
 
     # print("Tempurature: " + str(DRQ.getTempurature()))

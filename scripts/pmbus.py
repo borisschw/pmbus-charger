@@ -11,20 +11,21 @@ class PMBus:
         self.busID = id
         self.address = addr
 
-        # self.VOUT_MODE = self._readBytePMBus(0x20)
-        # voutN = self.VOUT_MODE & 0b00011111
-        # self.VOUT_N = self.twos_comp(voutN, 5)
+        self.VOUT_MODE = self._readBytePMBus(0x20)
+        voutN = self.VOUT_MODE & 0b00011111
+        self.VOUT_N = self.twos_comp(voutN, 5)
+        print("self.VOUT_N = ", self.VOUT_N)
         print("DRQ1250 succesfully connected to PMBus... \n")
 
     #Decode/encode Linear data format => X=Y*2^N
     def _decodePMBus(self, message):
-        print("Got message", bin(message))
+        # print("Got message", bin(message))
         messageN = message >> 11
-        print("messageN = ", messageN)
+        # print("messageN = ", messageN)
         messageY = message & 0b0000011111111111
-        print("messageY = ", messageY)
+        # print("messageY = ", messageY)
         message = messageY*(2.0**(self.twos_comp(messageN, 5))) #calculate real values (everything but VOUT works)
-        print("decoded message", message)
+        # print("decoded message", message)
         return message
 
     def _encodePMBus(self, message):
@@ -39,12 +40,12 @@ class PMBus:
         return message
 
     def _encodePMBus_with_N(self, message, Nval):
-        print("Sending X val = ",message)
+        # print("Sending X val = ",message)
         Yval = int(message * (2**-Nval))
-        print("sent Y val ",Yval)
+        # print("sent Y val ",Yval)
         message = ((int(Nval) & 0b00011111)<<11) | Yval
-        print("Sent message", bin(message))
-        print("")
+        # print("Sent message", bin(message))
+        # print("")
         return message
 
     #wrapper functions for reading/writing a word/byte to an address with pec
@@ -72,6 +73,12 @@ class PMBus:
         bus.pec = pecByte
         data = bus.read_byte_data(self.address, cmd)
         bus.close()
+        return data
+
+    def _readBlockPMBus(self, cmd, pecByte=True, force=None):
+        bus = SMBus(self.busID)
+        bus.pec = pecByte
+        data = bus.read_block_data(self.address, cmd)
         return data
 
     ################################### Functions for setting PMBus values
@@ -239,7 +246,10 @@ class PMBus:
         self._writeWordPMBus(0xB4, val)
 
     def setCurve_vbst (self, val):
-        self._writeWordPMBus(0xB1, self._encodePMBus_with_N(val,-9))
+        self._writeWordPMBus(0xB1, val * (2 ** -self.VOUT_N))
+
+    def setCurve_vfloat (self, val):
+        self._writeWordPMBus(0xB2, val * (2 ** -self.VOUT_N))
 
     def set_ccTimeout (self, val):
         self._writeWordPMBus(0xB5, self._encodePMBus_with_N(val, 0))
@@ -417,6 +427,11 @@ class PMBus:
         }
         return status, self.statusSummary
 
+    def get_status_cml(self):
+        self.status_cml = self._readBytePMBus(0x7E)
+        return self.status_cml
+
+
     def getCurve_ICHG(self):
         self.voltageIn = self._decodePMBus(self._readWordPMBus(0xB0))
         return self.voltageIn
@@ -429,6 +444,12 @@ class PMBus:
     def getCurve_vbst(self):
         self.curveVbstVal = self._decodePMBus(self._readWordPMBus(0xB1))
         return self.curveVbstVal
+
+    def getCurve_vfloat(self):
+        # self.curveVfloatVal = self._decodePMBus(self._readWordPMBus(0xB2))
+        self.curveVfloatVal = self._readWordPMBus(0xB2)*(2.0**self.VOUT_N)
+
+        return self.curveVfloatVal
 
     def getPmbusRev(self):
         self.PmbusRev = self._readBytePMBus(0x98)
@@ -450,6 +471,9 @@ class PMBus:
         self.chg_status = self._readWordPMBus(0xB8)
         return self.chg_status
 
+    def getMfrRevision(self):
+        self.mfrRev = self._readBlockPMBus(0x9B)
+        return self.mfrRev
 
     #method for computing twos complement
     def twos_comp(self, val, bits):
