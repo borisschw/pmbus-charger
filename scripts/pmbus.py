@@ -239,6 +239,12 @@ class PMBus:
         #max time is 100ms, min is 10ms for DRQ1250
         self._writeWordPMBus(0x65, self._encodePMBus(time))
 
+    def setVoutTrim(self,val):
+        self._writeWordPMBus(0x22, val * (2 ** -self.VOUT_N))
+
+    def setIoutOCLimit(self,current):
+        self._writeWordPMBus(0x46, self._encodePMBus_with_N(current,-3))
+
     def setCurve_ICHG(self,current):
         self._writeWordPMBus(0xB0, self._encodePMBus_with_N(current,-3))
 
@@ -306,16 +312,16 @@ class PMBus:
     ################################### Functions for getting PMBus values
     def getVoltageIn(self):
         self.voltageIn = self._decodePMBus(self._readWordPMBus(0x88))
-        return self.voltageIn
-
-    # def getVoltageOut(self):
-    #     voltageOutMessage = self._readWordPMBus(0x8B)
-    #     self.voltageOut = voltageOutMessage*(2.0**self.VOUT_N)
-    #     return self.voltageOut
+        return self.voltageIn * 2**(-1)
 
     def getVoltageOut(self):
-        self.VoltageOut = self._decodePMBus(self._readWordPMBus(0x8B))
-        return self.VoltageOut
+        voltageOutMessage = self._readWordPMBus(0x8B)
+        self.voltageOut = voltageOutMessage*(2.0**self.VOUT_N)
+        return self.voltageOut
+
+    # def getVoltageOut(self):
+    #     self.VoltageOut = self._decodePMBus(self._readWordPMBus(0x8B))
+    #     return self.VoltageOut
 
         # voltageOutMessage = self._readWordPMBus(0x8B)
         # self.voltageOut = voltageOutMessage*(2.0**self.VOUT_N)
@@ -326,6 +332,11 @@ class PMBus:
         self.current = self._decodePMBus(self._readWordPMBus(0x8C))
         bus.close()
         return self.current
+
+    def getVoltageOutCommand(self):
+        voltageOut = self._readWordPMBus(0x21)
+        self.voltageOutCommand = voltageOut*(2.0**self.VOUT_N)
+        return self.voltageOutCommand
 
     def getPowerOut(self, fromDRQ):
         if(fromDRQ == True):
@@ -427,6 +438,10 @@ class PMBus:
         }
         return status, self.statusSummary
 
+    def getIoutOCLimit(self):
+        self.oc_limit = self._decodePMBus(self._readWordPMBus(0x46))
+        return self.oc_limit
+
     def get_status_cml(self):
         self.status_cml = self._readBytePMBus(0x7E)
         return self.status_cml
@@ -440,9 +455,13 @@ class PMBus:
         self.curveConfigVal = self._readWordPMBus(0xB4)
         return self.curveConfigVal
 
+    def getVoutTrim(self):
+        vout_trim = self._readWordPMBus(0x22)
+        self.VoutTrim = self.twos_comp(vout_trim, 16) *(2.0**self.VOUT_N)
+        return self.VoutTrim
 
     def getCurve_vbst(self):
-        self.curveVbstVal = self._decodePMBus(self._readWordPMBus(0xB1))
+        self.curveVbstVal = self._readWordPMBus(0xB1)*(2.0**self.VOUT_N)
         return self.curveVbstVal
 
     def getCurve_vfloat(self):
